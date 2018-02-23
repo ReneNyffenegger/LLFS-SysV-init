@@ -1,1 +1,9 @@
 *.swp
+*.o
+src/bootlogd
+src/fstab-decode
+src/halt
+src/init
+src/killall5
+src/runlevel
+src/shutdown
