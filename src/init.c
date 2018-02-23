@@ -1,5 +1,5 @@
 /*
- * Init		A System-V Init Clone.
+  Init		A System-V Init Clone.
  *
  * Usage:	/sbin/init
  *		     init [0123456SsQqAaBbCc]
@@ -51,6 +51,8 @@
 #include <stdarg.h>
 #include <sys/syslog.h>
 #include <sys/time.h>
+
+#include "tq84-c-debug/tq84_debug.c"
 
 #ifdef WITH_SELINUX
 #  include <selinux/selinux.h>
@@ -838,6 +840,9 @@ void initlog(int loglevel, char *s, ...)
 	va_start(va_alist, s);
 	vsnprintf(buf, sizeof(buf), s, va_alist);
 	va_end(va_alist);
+
+  TQ84_DEBUG_INDENT();
+  TQ84_DEBUG("initlog");
 
 	if (loglevel & L_SY) {
 		/*
@@ -2521,9 +2526,12 @@ void init_main(void)
   sigset_t		sgt;
   int			f, st;
 
+  TQ84_DEBUG_INDENT();
+  TQ84_DEBUG("init_main");
   if (!reload) {
   
 #if INITDEBUG
+  TQ84_DEBUG("INITDBG is defined");
 	/*
 	 * Fork so we can debug the init process.
 	 */
@@ -2540,6 +2548,7 @@ void init_main(void)
 #endif
 
 #ifdef __linux__
+  TQ84_DEBUG("__linux__ is defined");
 	/*
 	 *	Tell the kernel to send us SIGINT when CTRL-ALT-DEL
 	 *	is pressed, and that we want to handle keyboard signals.
@@ -2571,9 +2580,11 @@ void init_main(void)
   SETSIG(sa, SIGCONT,  cont_handler, SA_RESTART);
   SETSIG(sa, SIGSEGV,  (void (*)(int))segv_handler, SA_RESTART);
 
+  TQ84_DEBUG("Calling console_init");
   console_init();
 
   if (!reload) {
+  TQ84_DEBUG("!reload");
 	int fd;
 
   	/* Close whatever files are open, and reset the console. */
@@ -2586,18 +2597,21 @@ void init_main(void)
   	/*
 	 *	Set default PATH variable.
 	 */
+    TQ84_DEBUG("Set default PATH from PATH_DEFAULT=%s", PATH_DEFAULT);
   	setenv("PATH", PATH_DEFAULT, 1 /* Overwrite */);
 
   	/*
 	 *	Initialize /var/run/utmp (only works if /var is on
 	 *	root and mounted rw)
 	 */
+    TQ84_DEBUG("UTMP_FILE=%s", UTMP_FILE);
 	if ((fd = open(UTMP_FILE, O_WRONLY|O_CREAT|O_TRUNC, 0644)) >= 0)
 		close(fd);
 
   	/*
 	 *	Say hello to the world
 	 */
+    TQ84_DEBUG("Say hello to the world");
   	initlog(L_CO, bootmsg, "booting");
 
   	/*
@@ -2801,12 +2815,26 @@ int main(int argc, char **argv)
 #ifdef WITH_SELINUX
 	int			enforce = 0;
 #endif
+  int tq84_i;
+
+  tq84_debug_open("w");
+  TQ84_DEBUG_INDENT();
+  TQ84_DEBUG("argc=%d", argc);
+  for (tq84_i=0; tq84_i<argc; tq84_i++) {
+    TQ84_DEBUG("argv %d=%s", tq84_i, argv[tq84_i]);
+  }
 
 	/* Get my own name */
+  TQ84_DEBUG("My own name, strrchr(argv[0], '/'): %s", strrchr(argv[0], '/'));
 	if ((p = strrchr(argv[0], '/')) != NULL)
   		p++;
 	else
   		p = argv[0];
+  TQ84_DEBUG("My own name, p=%s", p);
+
+  initlog(L_CO, "TQ84: this should be logged to the console ");
+  initlog(L_SY, "TQ84: this should be logged with syslogger ");
+  initlog(L_VB, "TQ84: this should be logged with both ");
 
 	/* Common umask */
 	umask(022);
@@ -2814,6 +2842,7 @@ int main(int argc, char **argv)
 	/* Quick check */
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s: must be superuser.\n", p);
+    TQ84_DEBUG("I am not superuser");
 		exit(1);
 	}
 
@@ -2829,10 +2858,13 @@ int main(int argc, char **argv)
 	}
 	if (!isinit) exit(telinit(p, argc, argv));
 
+  TQ84_DEBUG("Apparently, is init");
+
 	/*
 	 *	Check for re-exec
 	 */ 	
 	if (check_pipe(STATE_PIPE)) {
+    TQ84_DEBUG("check_pipe is true");
 
 		receive_state(STATE_PIPE);
 
@@ -2844,6 +2876,7 @@ int main(int argc, char **argv)
 		reload = 1;
 		setproctitle("init [%c]", (int)runlevel);
 
+    TQ84_DEBUG("calling init_main");
 		init_main();
 	}
 
@@ -2868,6 +2901,7 @@ int main(int argc, char **argv)
 	}
 
 #ifdef WITH_SELINUX
+  TQ84_DEBUG("WITH_SELINUX is defined");
 	if (getenv("SELINUX_INIT") == NULL) {
 	  const int rc = mount("proc", "/proc", "proc", 0, 0);
 	  if (is_selinux_enabled() > 0) {
@@ -2888,6 +2922,7 @@ int main(int argc, char **argv)
 	}
 #endif  
 	/* Start booting. */
+  TQ84_DEBUG("Start booting");
 	argv0 = argv[0];
 	argv[1] = NULL;
 	setproctitle("init boot");
