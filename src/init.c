@@ -52,8 +52,6 @@
 #include <sys/syslog.h>
 #include <sys/time.h>
 
-#include "tq84-c-debug/tq84_debug.c"
-
 #ifdef WITH_SELINUX
 #  include <selinux/selinux.h>
 #  include <sys/mount.h>
@@ -80,6 +78,8 @@
 #include "paths.h"
 #include "reboot.h"
 #include "set.h"
+
+#include "tq84-c-debug/tq84_debug.c"
 
 #ifndef SIGPWR
 #  define SIGPWR SIGUSR2
@@ -517,6 +517,8 @@ void console_init(void)
 	int tried_devcons = 0;
 	int tried_vtmaster = 0;
 	char *s;
+	TQ84_DEBUG_INDENT();
+
 
 	if ((s = getenv("CONSOLE")) != NULL)
 		console_dev = s;
@@ -525,6 +527,7 @@ void console_init(void)
 		tried_devcons++;
 	}
 
+	TQ84_DEBUG("trying to open console_dev = %s", console_dev);
 	while ((fd = open(console_dev, O_RDONLY|O_NONBLOCK)) < 0) {
 		if (!tried_devcons) {
 			tried_devcons++;
@@ -553,6 +556,7 @@ int console_open(int mode)
 {
 	int f, fd = -1;
 	int m;
+	TQ84_DEBUG_INDENT();
 
 	/*
 	 *	Open device in nonblocking mode.
@@ -729,6 +733,7 @@ void stop_handler(int sig)
 # endif
 {
 	int	saved_errno = errno;
+	TQ84_DEBUG_INDENT();
 
 	got_cont = 0;
 	while(!got_cont) pause();
@@ -744,6 +749,9 @@ void console_stty(void)
 {
 	struct termios tty;
 	int fd;
+
+	TQ84_DEBUG_INDENT();
+	TQ84_DEBUG("Setting terminal settings to reasonable defaults");
 
 	if ((fd = console_open(O_RDWR|O_NOCTTY)) < 0) {
 		initlog(L_VB, "can't open %s", console_dev);
@@ -788,6 +796,7 @@ void console_stty(void)
 	 */
 	tty.c_iflag = IGNPAR|ICRNL|IXON|IXANY;
 #ifdef IUTF8 /* Not defined on FreeBSD */
+	TQ84_DEBUG("IUTF8 is defined");
 	tty.c_iflag |= IUTF8;
 #endif /* IUTF8 */
 	tty.c_oflag = OPOST|ONLCR;
@@ -841,8 +850,8 @@ void initlog(int loglevel, char *s, ...)
 	vsnprintf(buf, sizeof(buf), s, va_alist);
 	va_end(va_alist);
 
-  TQ84_DEBUG_INDENT();
-  TQ84_DEBUG("initlog");
+  // TQ84_DEBUG_INDENT();
+  // TQ84_DEBUG("initlog");
 
 	if (loglevel & L_SY) {
 		/*
@@ -942,6 +951,9 @@ pid_t spawn(CHILD *ch, int *res)
   sigset_t nmask, omask;	/* For blocking SIGCHLD */
   struct sigaction sa;
 
+  TQ84_DEBUG_INDENT();
+  TQ84_DEBUG("Process to span seems to be: %s", proc);
+
   *res = -1;
   buf[sizeof(buf) - 1] = 0;
 
@@ -951,6 +963,7 @@ pid_t spawn(CHILD *ch, int *res)
   ch->flags |= XECUTED;
 
   if (ch->action == RESPAWN || ch->action == ONDEMAND) {
+	TQ84_DEBUG("action == RESPAWN | ONDEMAND");
 	/* Is the date stamp from less than 2 minutes ago? */
 	time(&t);
 	if (ch->tm + TESTTIME > t) {
@@ -982,6 +995,7 @@ pid_t spawn(CHILD *ch, int *res)
 
   /* See if there is an "initscript" (except in single user mode). */
   if (access(INITSCRIPT, R_OK) == 0 && runlevel != 'S') {
+	TQ84_DEBUG("access INITSCRIPT && runlevel != S");
 	/* Build command line using "initscript" */
 	args[1] = SHELL;
 	args[2] = INITSCRIPT;
@@ -997,6 +1011,7 @@ pid_t spawn(CHILD *ch, int *res)
 	args[6] = proc;
 	args[7] = NULL;
   } else if (strpbrk(proc, "~`!$^&*()=|\\{}[];\"'<>?")) {
+	TQ84_DEBUG("Need to fire up SHELL=%s", SHELL);
   /* See if we need to fire off a shell for this command */
   	/* Give command line to shell */
   	args[1] = SHELL;
@@ -1007,6 +1022,7 @@ pid_t spawn(CHILD *ch, int *res)
   	args[4] = NULL;
   } else {
 	/* Split up command line arguments */
+	TQ84_DEBUG("Split up command lines arguments", SHELL);
 	buf[0] = 0;
   	strncat(buf, proc, sizeof(buf) - 1);
   	ptr = buf;
@@ -1202,6 +1218,7 @@ pid_t spawn(CHILD *ch, int *res)
 static
 void startup(CHILD *ch)
 {
+	TQ84_DEBUG_INDENT();
 	/*
 	 *	See if it's disabled
 	 */
@@ -1257,6 +1274,8 @@ void read_inittab(void)
   int		talk;			/* Talk to the user */
   int		done = 0;		/* Ready yet? */
 
+  TQ84_DEBUG_INDENT();
+
 #if DEBUG
   if (newFamily != NULL) {
 	INITDBG(L_VB, "PANIC newFamily != NULL");
@@ -1302,6 +1321,8 @@ void read_inittab(void)
 	rlevel =  strsep(&p, ":");
 	action =  strsep(&p, ":");
 	process = strsep(&p, "\n");
+
+	TQ84_DEBUG("found id=%s, rlevel=%s, action=%s, process=%s", id, rlevel, action, process);
 
 	/*
 	 *	Check if syntax is OK. Be very verbose here, to
@@ -1546,6 +1567,7 @@ void read_inittab(void)
   /*
    *	Now give all processes the chance to die and collect exit statuses.
    */
+  TQ84_DEBUG("Now give all processes the chance to die and collect exit statuses.");
   if (foundOne) do_sleep(1);
   for(ch = family; ch; ch = ch->next)
 	if (ch->flags & KILLME) {
@@ -1621,6 +1643,7 @@ void start_if_needed(void)
 	CHILD *ch;		/* Pointer to child */
 	int delete;		/* Delete this entry from list? */
 
+	TQ84_DEBUG_INDENT();
 	INITDBG(L_VB, "Checking for children to start");
 
 	for(ch = family; ch; ch = ch->next) {
@@ -2119,6 +2142,7 @@ void initcmd_setenv(char *data, int size)
 
 	e = data + size;
 
+	//initlog(L_SY, "TQ84: init_setenv, data=%s", data);
 	while (*data && data < e) {
 		eq = NULL;
 		for (p = data; *p && p < e; p++)
@@ -2179,6 +2203,8 @@ void check_init_fifo(void)
   int			n;
   int			quit = 0;
 
+  TQ84_DEBUG_INDENT();
+
   /*
    *	First, try to create /dev/initctl if not present.
    */
@@ -2202,6 +2228,7 @@ void check_init_fifo(void)
   /*
    *	Now finally try to open /dev/initctl
    */
+  TQ84_DEBUG("Trying to open /dev/initctl");
   if (pipe_fd < 0) {
 	if ((pipe_fd = open(INIT_FIFO, O_RDWR|O_NONBLOCK)) >= 0) {
 		fstat(pipe_fd, &st);
@@ -2526,12 +2553,14 @@ void init_main(void)
   sigset_t		sgt;
   int			f, st;
 
-  TQ84_DEBUG_INDENT();
-  TQ84_DEBUG("init_main");
+  // TQ84_DEBUG_INDENT();
+  // TQ84_DEBUG("init_main");
+  //initlog(L_SY, "TQ84: In init_main");
   if (!reload) {
   
 #if INITDEBUG
-  TQ84_DEBUG("INITDBG is defined");
+  	//initlog(L_SY, "TQ84: INITDBG defined");
+  // TQ84_DEBUG("INITDBG is defined");
 	/*
 	 * Fork so we can debug the init process.
 	 */
@@ -2548,7 +2577,7 @@ void init_main(void)
 #endif
 
 #ifdef __linux__
-  TQ84_DEBUG("__linux__ is defined");
+  // TQ84_DEBUG("__linux__ is defined");
 	/*
 	 *	Tell the kernel to send us SIGINT when CTRL-ALT-DEL
 	 *	is pressed, and that we want to handle keyboard signals.
@@ -2581,10 +2610,11 @@ void init_main(void)
   SETSIG(sa, SIGSEGV,  (void (*)(int))segv_handler, SA_RESTART);
 
   TQ84_DEBUG("Calling console_init");
+  //initlog(L_SY, "TQ84: Calling console_init");
   console_init();
 
   if (!reload) {
-  TQ84_DEBUG("!reload");
+	TQ84_DEBUG_INDENT_T("! reload");
 	int fd;
 
   	/* Close whatever files are open, and reset the console. */
@@ -2597,21 +2627,21 @@ void init_main(void)
   	/*
 	 *	Set default PATH variable.
 	 */
-    TQ84_DEBUG("Set default PATH from PATH_DEFAULT=%s", PATH_DEFAULT);
+	TQ84_DEBUG("Set default PATH from PATH_DEFAULT=%s", PATH_DEFAULT);
   	setenv("PATH", PATH_DEFAULT, 1 /* Overwrite */);
 
   	/*
 	 *	Initialize /var/run/utmp (only works if /var is on
 	 *	root and mounted rw)
 	 */
-    TQ84_DEBUG("UTMP_FILE=%s", UTMP_FILE);
+	TQ84_DEBUG("UTMP_FILE=%s", UTMP_FILE);
 	if ((fd = open(UTMP_FILE, O_WRONLY|O_CREAT|O_TRUNC, 0644)) >= 0)
 		close(fd);
 
   	/*
 	 *	Say hello to the world
 	 */
-    TQ84_DEBUG("Say hello to the world");
+	TQ84_DEBUG("Say hello to the world");
   	initlog(L_CO, bootmsg, "booting");
 
   	/*
@@ -2635,6 +2665,7 @@ void init_main(void)
   	read_inittab();
   
   } else {
+	TQ84_DEBUG("restart/reload");
 	/*
 	 *	Restart: unblock signals and let the show go on
 	 */
@@ -2645,8 +2676,10 @@ void init_main(void)
   	/*
 	 *	Set default PATH variable.
 	 */
+	//initlog(L_SY, "TQ84: Settting PATH to default: %s", PATH_DEFAULT);
   	setenv("PATH", PATH_DEFAULT, 0 /* Don't overwrite */);
   }
+  TQ84_DEBUG("calling start_if_needed");
   start_if_needed();
 
   while(1) {
@@ -2709,6 +2742,9 @@ int telinit(char *progname, int argc, char **argv)
 	memset(&request, 0, sizeof(request));
 	request.magic     = INIT_MAGIC;
 
+	TQ84_DEBUG_INDENT();
+	TQ84_DEBUG("progname = %s", progname);
+
 	while ((f = getopt(argc, argv, "t:e:")) != EOF) switch(f) {
 		case 't':
 			sltime = atoi(optarg);
@@ -2759,6 +2795,8 @@ int telinit(char *progname, int argc, char **argv)
 		size_t s  = sizeof(request);
 		void *ptr = &request;
 
+		TQ84_DEBUG("Opened INIT_FIFO=%s", INIT_FIFO);
+
 		while (s > 0) {
 			p = write(fd, ptr, s);
 			if (p < 0) {
@@ -2776,6 +2814,7 @@ int telinit(char *progname, int argc, char **argv)
 
 #ifdef TELINIT_USES_INITLVL
 	if (request.cmd == INIT_CMD_RUNLVL) {
+		TQ84_DEBUG("request.cmd == INIT_CMD_RUNLVL");
 		/* Fallthrough to the old method. */
 
 		/* Now write the new runlevel. */
@@ -2815,26 +2854,25 @@ int main(int argc, char **argv)
 #ifdef WITH_SELINUX
 	int			enforce = 0;
 #endif
-  int tq84_i;
+  // int tq84_i;
 
-  tq84_debug_open("w");
-  TQ84_DEBUG_INDENT();
-  TQ84_DEBUG("argc=%d", argc);
-  for (tq84_i=0; tq84_i<argc; tq84_i++) {
-    TQ84_DEBUG("argv %d=%s", tq84_i, argv[tq84_i]);
-  }
+  //tq84_debug_open("/etc/lfs/init.log", "w");
+    TQ84_DEBUG_INDENT();
+    TQ84_DEBUG("argc=%d", argc);
+  //for (tq84_i=0; tq84_i<argc; tq84_i++) {
+  //  TQ84_DEBUG("argv %d=%s", tq84_i, argv[tq84_i]);
+  //}
 
 	/* Get my own name */
-  TQ84_DEBUG("My own name, strrchr(argv[0], '/'): %s", strrchr(argv[0], '/'));
+	TQ84_DEBUG("My own name, strrchr(argv[0], '/'): %s", strrchr(argv[0], '/'));
 	if ((p = strrchr(argv[0], '/')) != NULL)
   		p++;
 	else
   		p = argv[0];
-  TQ84_DEBUG("My own name, p=%s", p);
 
-  initlog(L_CO, "TQ84: this should be logged to the console ");
-  initlog(L_SY, "TQ84: this should be logged with syslogger ");
-  initlog(L_VB, "TQ84: this should be logged with both ");
+	TQ84_DEBUG("My own name, p=%s", p);
+
+
 
 	/* Common umask */
 	umask(022);
@@ -2842,7 +2880,7 @@ int main(int argc, char **argv)
 	/* Quick check */
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s: must be superuser.\n", p);
-    TQ84_DEBUG("I am not superuser");
+		TQ84_DEBUG("I am not superuser");
 		exit(1);
 	}
 
@@ -2850,6 +2888,7 @@ int main(int argc, char **argv)
 	 *	Is this telinit or init ?
 	 */
 	isinit = (getpid() == 1);
+	TQ84_DEBUG("isinit = %d", isinit);
 	for (f = 1; f < argc; f++) {
 		if (!strcmp(argv[f], "-i") || !strcmp(argv[f], "--init")) {
 			isinit = 1;
@@ -2858,13 +2897,14 @@ int main(int argc, char **argv)
 	}
 	if (!isinit) exit(telinit(p, argc, argv));
 
-  TQ84_DEBUG("Apparently, is init");
+	TQ84_DEBUG("Apparently, is init");
 
 	/*
 	 *	Check for re-exec
 	 */ 	
 	if (check_pipe(STATE_PIPE)) {
-    TQ84_DEBUG("check_pipe is true");
+		TQ84_DEBUG("check_pipe is true");
+		initlog(L_SY, "TQ84: check_pipe is true"); 
 
 		receive_state(STATE_PIPE);
 
@@ -2876,7 +2916,8 @@ int main(int argc, char **argv)
 		reload = 1;
 		setproctitle("init [%c]", (int)runlevel);
 
-    TQ84_DEBUG("calling init_main");
+		TQ84_DEBUG("calling init_main");
+		initlog(L_SY, "TQ84: calling init_main (1)");	
 		init_main();
 	}
 
@@ -2901,7 +2942,8 @@ int main(int argc, char **argv)
 	}
 
 #ifdef WITH_SELINUX
-  TQ84_DEBUG("WITH_SELINUX is defined");
+	TQ84_DEBUG("WITH_SELINUX is defined");
+	initlog(L_SY, "TQ84: WITH_SELINUX is defined");
 	if (getenv("SELINUX_INIT") == NULL) {
 	  const int rc = mount("proc", "/proc", "proc", 0, 0);
 	  if (is_selinux_enabled() > 0) {
@@ -2922,10 +2964,11 @@ int main(int argc, char **argv)
 	}
 #endif  
 	/* Start booting. */
-  TQ84_DEBUG("Start booting");
+	TQ84_DEBUG("Start booting");
 	argv0 = argv[0];
 	argv[1] = NULL;
 	setproctitle("init boot");
+	//initlog(L_SY, "TQ84: calling init_main (2)");
 	init_main();
 
 	/*NOTREACHED*/

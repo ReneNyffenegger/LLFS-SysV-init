@@ -9,7 +9,8 @@
 #
 
 CPPFLAGS =
-CFLAGS	?= -ansi -O2 -fomit-frame-pointer
+# CFLAGS	?= -ansi -O2 -fomit-frame-pointer
+CFLAGS	?=  -O2 -fomit-frame-pointer
 override CFLAGS += -W -Wall -D_GNU_SOURCE
 STATIC	=
 
