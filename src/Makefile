@@ -16,27 +16,20 @@ STATIC	=
 # For some known distributions we do not build all programs, otherwise we do.
 BIN	=
 SBIN	= init halt shutdown runlevel killall5 fstab-decode
-USRBIN	= last mesg
 
-MAN1	= last.1 lastb.1 mesg.1
 MAN5	= initscript.5 inittab.5
-MAN8	= halt.8 init.8 killall5.8 pidof.8 poweroff.8 reboot.8 runlevel.8
+MAN8	= halt.8 init.8 killall5.8  poweroff.8 reboot.8 runlevel.8
 MAN8	+= shutdown.8 telinit.8 fstab-decode.8
 
 ifeq ($(DISTRO),)
-BIN	+= mountpoint
-SBIN	+= sulogin bootlogd
-USRBIN	+= utmpdump wall
-MAN1	+= utmpdump.1 mountpoint.1 wall.1
-MAN8	+= sulogin.8 bootlogd.8
+SBIN	+= bootlogd
+MAN8	+= bootlogd.8
 endif
 
 ifeq ($(DISTRO),Debian)
 CPPFLAGS+= -DACCTON_OFF
-BIN	+= mountpoint
-SBIN	+= sulogin bootlogd
-MAN1	+= mountpoint.1
-MAN8	+= sulogin.8 bootlogd.8
+SBIN	+= bootlogd
+MAN8	+= bootlogd.8
 endif
 
 ifeq ($(DISTRO),Owl)
@@ -46,11 +39,8 @@ endif
 
 ifeq ($(DISTRO),SuSE)
 CPPFLAGS+= -DUSE_SYSFS -DSANE_TIO -DSIGINT_ONLYONCE -DUSE_ONELINE
-BIN	+= mountpoint
-SBIN	+= sulogin
-USRBIN	+= utmpdump
-MAN1	+= utmpdump.1 mountpoint.1
-MAN8	+= sulogin.8
+SBIN	+=
+MAN8	+=
 endif
 
 ID		= $(shell id -u)
@@ -96,11 +86,8 @@ halt:		halt.o ifdown.o hddown.o utmp.o reboot.h
 
 last:		last.o oldutmp.h
 
-mesg:		mesg.o
 
-mountpoint:	mountpoint.o
 
-utmpdump:	utmpdump.o
 
 runlevel:	runlevel.o
 
@@ -138,8 +125,7 @@ clobber:	cleanobjs
 distclean:	clobber
 
 install:
-		$(INSTALL_DIR) $(ROOT)/bin/ $(ROOT)/sbin/
-		$(INSTALL_DIR) $(ROOT)/usr/bin/
+		$(INSTALL_DIR)  $(ROOT)/sbin/
 		for i in $(BIN); do \
 			$(INSTALL_EXEC) $$i $(ROOT)/bin/ ; \
 		done
@@ -154,13 +140,8 @@ install:
 		ln -sf halt $(ROOT)/sbin/reboot
 		ln -sf halt $(ROOT)/sbin/poweroff
 		ln -sf init $(ROOT)/sbin/telinit
-		ln -sf /sbin/killall5 $(ROOT)/bin/pidof
-		if [ ! -f $(ROOT)/usr/bin/lastb ]; then \
-			ln -sf last $(ROOT)/usr/bin/lastb; \
-		fi
 		$(INSTALL_DIR) $(ROOT)/usr/include/
 		$(INSTALL_DATA) initreq.h $(ROOT)/usr/include/
-		$(INSTALL_DIR) $(ROOT)$(MANDIR)/man1/
 		$(INSTALL_DIR) $(ROOT)$(MANDIR)/man5/
 		$(INSTALL_DIR) $(ROOT)$(MANDIR)/man8/
 		for i in $(MAN1); do \
