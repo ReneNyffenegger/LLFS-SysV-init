@@ -556,7 +556,7 @@ int console_open(int mode)
 {
 	int f, fd = -1;
 	int m;
-	TQ84_DEBUG_INDENT();
+	TQ84_DEBUG_INDENT_T("Open the console with retries, console_dev=%s", console_dev);
 
 	/*
 	 *	Open device in nonblocking mode.
@@ -952,7 +952,7 @@ pid_t spawn(CHILD *ch, int *res)
   struct sigaction sa;
 
   TQ84_DEBUG_INDENT();
-  TQ84_DEBUG("Process to span seems to be: %s", proc);
+  TQ84_DEBUG("Spawn process %s", proc);
 
   *res = -1;
   buf[sizeof(buf) - 1] = 0;
@@ -1018,6 +1018,7 @@ pid_t spawn(CHILD *ch, int *res)
   	args[2] = "-c";
   	strcpy(buf, "exec ");
   	strncat(buf, proc, sizeof(buf) - strlen(buf) - 1);
+	TQ84_DEBUG("buf=%s", buf);
   	args[3] = buf;
   	args[4] = NULL;
   } else {
@@ -1218,11 +1219,14 @@ pid_t spawn(CHILD *ch, int *res)
 static
 void startup(CHILD *ch)
 {
-	TQ84_DEBUG_INDENT();
+	TQ84_DEBUG_INDENT_T("Start a child running");
 	/*
 	 *	See if it's disabled
 	 */
 	if (ch->flags & FAILING) return;
+
+	TQ84_DEBUG("ch->action = %d, 13=SYSINIT/9=CTRLALTDEL/12=INITDEFAULT/2=WAIT", ch->action);
+        
 
 	switch(ch->action) {
 
@@ -1242,6 +1246,7 @@ void startup(CHILD *ch)
 		case ONDEMAND:
 		case RESPAWN:
   			ch->flags |= RUNNING;
+			TQ84_DEBUG("Calling spawn");
   			(void)spawn(ch, &(ch->pid));
   			break;
 	}
@@ -1322,7 +1327,7 @@ void read_inittab(void)
 	action =  strsep(&p, ":");
 	process = strsep(&p, "\n");
 
-	TQ84_DEBUG("found id=%s, rlevel=%s, action=%s, process=%s", id, rlevel, action, process);
+//	TQ84_DEBUG("found id=%s, rlevel=%s, action=%s, process=%s", id, rlevel, action, process);
 
 	/*
 	 *	Check if syntax is OK. Be very verbose here, to
@@ -1402,14 +1407,19 @@ void read_inittab(void)
 	 *	We have the fake runlevel '#' for SYSINIT  and
 	 *	'*' for BOOT and BOOTWAIT.
 	 */
-	if (ch->action == SYSINIT) strcpy(ch->rlevel, "#");
-	if (ch->action == BOOT || ch->action == BOOTWAIT)
+	if (ch->action == SYSINIT){strcpy(ch->rlevel, "#");
+        	TQ84_DEBUG("ch->action == SYSINIT");
+        }	
+	if (ch->action == BOOT || ch->action == BOOTWAIT) {
 		strcpy(ch->rlevel, "*");
+        	TQ84_DEBUG("ch->action is BOOT || BOTWAIT");
+	}
 
 	/*
 	 *	Now add it to the linked list. Special for powerfail.
 	 */
 	if (ISPOWER(ch->action)) {
+		TQ84_DEBUG("Adding to linked list for powerfail");
 
 		/*
 		 *	Disable by default
@@ -1469,6 +1479,7 @@ void read_inittab(void)
    */
 
   INITDBG(L_VB, "Checking for children to kill");
+  TQ84_DEBUG("Checking for children to kill");
   for(round = 0; round < 2; round++) {
     talk = 1;
     for(ch = family; ch; ch = ch->next) {
@@ -1664,6 +1675,7 @@ void start_if_needed(void)
 		delete = 1;
 		if (strchr(ch->rlevel, runlevel) ||
 		    ((ch->flags & DEMAND) && !strchr("#*Ss", runlevel))) {
+			TQ84_DEBUG("calling startup");
 			startup(ch);
 			delete = 0;
 		}
@@ -1719,12 +1731,14 @@ int get_init_default(void)
 	CHILD *ch;
 	int lvl = -1;
 	char *p;
+	TQ84_DEBUG_INDENT();
 
 	/*
 	 *	Look for initdefault.
 	 */
 	for(ch = family; ch; ch = ch->next)
 		if (ch->action == INITDEFAULT) {
+			TQ84_DEBUG("Found INITDEFAULT, ch->rlevel=%s, lvl=d: %d, c: %c", ch->rlevel, lvl, lvl);
 			p = ch->rlevel;
 			while(*p) {
 				if (*p > lvl) lvl = *p;
@@ -1738,6 +1752,7 @@ int get_init_default(void)
 	if (lvl > 0) {
 		if (islower(lvl)) lvl = toupper(lvl);
 		if (strchr("0123456789S", lvl) == NULL) {
+			TQ84_DEBUG("Initdefault level '%c' is invalid", lvl);
 			initlog(L_VB,
 				"Initdefault level '%c' is invalid", lvl);
 			lvl = 0;
@@ -1751,6 +1766,7 @@ int get_init_default(void)
 	/*
 	 *	Log the fact that we have a runlevel now.
 	 */
+	TQ84_DEBUG("returning lvl=d: %d, c: %c", lvl, lvl);
 	return lvl;
 }
 
@@ -1773,6 +1789,7 @@ int read_level(int arg)
 	struct stat	stt;
 	int		st;
 #endif
+	TQ84_DEBUG_INDENT();
 
 	if (arg) foo = arg;
 
@@ -2111,6 +2128,7 @@ void fifo_new_level(int level)
 #endif
 	{
 		/* We need to go into a new runlevel */
+		TQ84_DEBUG("We need to go into a new runlevel");
 		oldlevel = runlevel;
 		runlevel = read_level(level);
 		if (runlevel == 'U') {
@@ -2124,6 +2142,10 @@ void fifo_new_level(int level)
 			read_inittab();
 			fail_cancel();
 			setproctitle("init [%c]", (int)runlevel);
+			if (runlevel == '3') {
+				TQ84_DEBUG("Closing tq_debug");
+				tq84_debug_close();
+			}
 		}
 	}
 }
@@ -2348,16 +2370,19 @@ void boot_transitions()
   int		loglevel;
   int		oldlevel;
 
+  TQ84_DEBUG_INDENT_T("Used in sysinit boot -> multi-user");
   /* Check if there is something to wait for! */
   for( ch = family; ch; ch = ch->next )
 	if ((ch->flags & RUNNING) && ch->action != BOOT) break;
      
   if (ch == NULL) {
 	/* No processes left in this level, proceed to next level. */
+	TQ84_DEBUG("No processes left in this level, proceed to next level, runlevel=%c.", runlevel);
 	loglevel = -1;
 	oldlevel = 'N';
 	switch(runlevel) {
 		case '#': /* SYSINIT -> BOOT */
+			TQ84_DEBUG("SYSINIT -> BOOT");
 			INITDBG(L_VB, "SYSINIT -> BOOT");
 
 			/* Write a boot record. */
@@ -2367,6 +2392,7 @@ void boot_transitions()
 
   			/* Get our run level */
   			newlevel = dfl_level ? dfl_level : get_init_default();
+			TQ84_DEBUG("newlevel=d: %d, c: %c", newlevel, newlevel);
 			if (newlevel == 'S') {
 				runlevel = newlevel;
 				/* Not really 'S' but show anyway. */
@@ -2375,6 +2401,7 @@ void boot_transitions()
 				runlevel = '*';
 			break;
 		case '*': /* BOOT -> NORMAL */
+			TQ84_DEBUG("BOOT -> NORMAL");
 			INITDBG(L_VB, "BOOT -> NORMAL");
 			if (runlevel != newlevel)
 				loglevel = newlevel;
@@ -2384,6 +2411,7 @@ void boot_transitions()
 			break;
 		case 'S': /* Ended SU mode */
 		case 's':
+			TQ84_DEBUG("END SU MODE");
 			INITDBG(L_VB, "END SU MODE");
 			newlevel = get_init_default();
 			if (!did_boot && newlevel != 'S')
@@ -2400,6 +2428,7 @@ void boot_transitions()
 				ch->flags &= ~(FAILING|WAITING|XECUTED);
 			break;
 		default:
+			TQ84_DEBUG("default");
 			if (warn)
 			  initlog(L_VB,
 				"no more processes left in this runlevel");
@@ -2410,6 +2439,7 @@ void boot_transitions()
 			break;
 	}
 	if (loglevel > 0) {
+		TQ84_DEBUG("logelevel %c > 0: entering into runlevel %c", loglevel, runlevel);
 		initlog(L_VB, "Entering runlevel: %c", runlevel);
 		wrote_utmp_rlevel = 0;
 		wrote_wtmp_rlevel = 0;
@@ -2417,6 +2447,9 @@ void boot_transitions()
 		thislevel = runlevel;
 		prevlevel = oldlevel;
 		setproctitle("init [%c]", (int)runlevel);
+		if (runlevel == '3') {
+//			tq84_debug_close();
+		}
 	}
   }
 }
@@ -2513,6 +2546,7 @@ void process_signals()
 #endif
 	{
 		/* We need to go into a new runlevel */
+		TQ84_DEBUG("We need to go into a new runlevel (2)");
 		oldlevel = runlevel;
 #ifdef INITLVL
 		runlevel = read_level(0);
@@ -2528,6 +2562,10 @@ void process_signals()
 			fail_cancel();
 			setproctitle("init [%c]", (int)runlevel);
 			DELSET(got_signals, SIGHUP);
+		}
+		if (runlevel == '3') {
+			TQ84_DEBUG("Closing tq_debug");
+			tq84_debug_close();
 		}
 	}
   }
@@ -2553,14 +2591,11 @@ void init_main(void)
   sigset_t		sgt;
   int			f, st;
 
-  // TQ84_DEBUG_INDENT();
-  // TQ84_DEBUG("init_main");
-  //initlog(L_SY, "TQ84: In init_main");
+  TQ84_DEBUG_INDENT();
   if (!reload) {
   
 #if INITDEBUG
-  	//initlog(L_SY, "TQ84: INITDBG defined");
-  // TQ84_DEBUG("INITDBG is defined");
+	TQ84_DEBUG("INITDBG is defined");
 	/*
 	 * Fork so we can debug the init process.
 	 */
@@ -2577,11 +2612,12 @@ void init_main(void)
 #endif
 
 #ifdef __linux__
-  // TQ84_DEBUG("__linux__ is defined");
+	TQ84_DEBUG("__linux__ is defined");
 	/*
 	 *	Tell the kernel to send us SIGINT when CTRL-ALT-DEL
 	 *	is pressed, and that we want to handle keyboard signals.
 	 */
+	TQ84_DEBUG("Calling init_reboot");
 	init_reboot(BMAGIC_SOFT);
 	if ((f = open(VT_MASTER, O_RDWR | O_NOCTTY)) >= 0) {
 		(void) ioctl(f, KDSIGACCEPT, SIGWINCH);
@@ -2610,7 +2646,6 @@ void init_main(void)
   SETSIG(sa, SIGSEGV,  (void (*)(int))segv_handler, SA_RESTART);
 
   TQ84_DEBUG("Calling console_init");
-  //initlog(L_SY, "TQ84: Calling console_init");
   console_init();
 
   if (!reload) {
@@ -2641,13 +2676,15 @@ void init_main(void)
   	/*
 	 *	Say hello to the world
 	 */
-	TQ84_DEBUG("Say hello to the world");
+	TQ84_DEBUG("Say hello to the world, booting");
   	initlog(L_CO, bootmsg, "booting");
 
   	/*
 	 *	See if we have to start an emergency shell.
 	 */
+	TQ84_DEBUG("Check if emerg_shell");
 	if (emerg_shell) {
+		TQ84_DEBUG("Have to start emergency shell");
 		pid_t rc;
 		SETSIG(sa, SIGCHLD, SIG_DFL, SA_RESTART);
 		if (spawn(&ch_emerg, &f) > 0) {
@@ -2661,6 +2698,7 @@ void init_main(void)
   	/*
 	 *	Start normal boot procedure.
 	 */
+	TQ84_DEBUG("Start normal boot procedure, setting runlevel to #");
   	runlevel = '#';
   	read_inittab();
   
@@ -2679,13 +2717,15 @@ void init_main(void)
 	//initlog(L_SY, "TQ84: Settting PATH to default: %s", PATH_DEFAULT);
   	setenv("PATH", PATH_DEFAULT, 0 /* Don't overwrite */);
   }
-  TQ84_DEBUG("calling start_if_needed");
+  TQ84_DEBUG("calling start_if_needed (1)");
   start_if_needed();
 
   while(1) {
 
      /* See if we need to make the boot transitions. */
+     TQ84_DEBUG("Calling boot_transitions()");
      boot_transitions();
+     TQ84_DEBUG("waiting");
      INITDBG(L_VB, "init_main: waiting..");
 
      /* Check if there are processes to be waited on. */
@@ -2693,6 +2733,7 @@ void init_main(void)
 	if ((ch->flags & RUNNING) && ch->action != BOOT) break;
 
 #if CHANGE_WAIT
+     TQ84_DEBUG("CHANGE_WAIT is defined");
      /* Wait until we get hit by some signal. */
      while (ch != NULL && got_signals == 0) {
 	if (ISMEMBER(got_signals, SIGHUP)) {
@@ -2707,13 +2748,21 @@ void init_main(void)
 #endif /* CHANGE_WAIT */
 
      /* Check the 'failing' flags */
+     TQ84_DEBUG("calling fail_check");
      fail_check();
 
      /* Process any signals. */
+     TQ84_DEBUG("calling process_signals");
      process_signals();
 
      /* See what we need to start up (again) */
+     TQ84_DEBUG("calling start_if_needed (2)");
      start_if_needed();
+	
+     if (runlevel == '3') {
+	TQ84_DEBUG("Closing tq_debug");
+        tq84_debug_close();
+     }
   }
   /*NOTREACHED*/
 }
@@ -2854,14 +2903,14 @@ int main(int argc, char **argv)
 #ifdef WITH_SELINUX
 	int			enforce = 0;
 #endif
-  // int tq84_i;
+	int tq84_i;
 
-  //tq84_debug_open("/etc/lfs/init.log", "w");
-    TQ84_DEBUG_INDENT();
-    TQ84_DEBUG("argc=%d", argc);
-  //for (tq84_i=0; tq84_i<argc; tq84_i++) {
-  //  TQ84_DEBUG("argv %d=%s", tq84_i, argv[tq84_i]);
-  //}
+	tq84_debug_open("/run/tq84-init.log", "w");
+	TQ84_DEBUG_INDENT();
+	TQ84_DEBUG("argc=%d, pid=%d", argc, getpid());
+	for (tq84_i=0; tq84_i<argc; tq84_i++) {
+		TQ84_DEBUG("argv %d=%s", tq84_i, argv[tq84_i]);
+	}
 
 	/* Get my own name */
 	TQ84_DEBUG("My own name, strrchr(argv[0], '/'): %s", strrchr(argv[0], '/'));
@@ -2968,7 +3017,6 @@ int main(int argc, char **argv)
 	argv0 = argv[0];
 	argv[1] = NULL;
 	setproctitle("init boot");
-	//initlog(L_SY, "TQ84: calling init_main (2)");
 	init_main();
 
 	/*NOTREACHED*/

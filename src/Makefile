@@ -9,8 +9,8 @@
 #
 
 CPPFLAGS =
-# CFLAGS	?= -ansi -O2 -fomit-frame-pointer
-CFLAGS	?=  -O2 -fomit-frame-pointer
+#tq84 CFLAGS	?= -ansi -O2 -fomit-frame-pointer
+CFLAGS	?=  -O2 -fomit-frame-pointer -D TQ84_DEBUG_TO_MEMORY
 override CFLAGS += -W -Wall -D_GNU_SOURCE
 STATIC	=
 
